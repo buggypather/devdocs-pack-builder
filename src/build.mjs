@@ -265,7 +265,10 @@ function readPage(file, docPath, repoDir, liquid, docName) {
       .map((segment) => segment.replace(/[^\w.~-]+/g, "-"))
       .join("/") || "index";
 
-  let { data, body } = splitFrontMatter(readFileSync(file, "utf8"));
+  // Windows line endings would throw off the line-based handling of tags.
+  let { data, body } = splitFrontMatter(readFileSync(file, "utf8").replace(/
+?/g, "
+"));
   // MDX: imports and exports aren't content.
   if (/\.mdx$/i.test(file)) body = body.replace(/^(import|export)\s.*$/gm, "");
   body = renderLiquid(body, liquid);
