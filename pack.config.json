@@ -4,6 +4,7 @@
     {
       "name": "GitHub Pages",
       "slug": "github_pages",
+      "category": "services",
       "source": {
         "repo": "github/docs",
         "path": "content/pages",

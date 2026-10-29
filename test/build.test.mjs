@@ -15,6 +15,7 @@ const config = {
     {
       name: "Widget",
       slug: "widget",
+      category: "tools",
       source: { dir: "repo", repo: "owner/repo", path: "content/guide", root: "content" },
       site: "https://docs.example.com/en",
       attribution: "&copy; Example",
@@ -37,6 +38,7 @@ test("a Markdown folder becomes a doc pack DevDocs can read", (t) => {
   const [doc] = manifest.docs;
   assert.equal(doc.slug, "widget");
   assert.equal(doc.type, "simple");
+  assert.equal(doc.category, "tools");
   assert.equal(doc.db_size, Buffer.byteLength(read(out, "widget/db.json")));
   assert.deepEqual(doc.links, { home: "https://docs.example.com/en", code: "https://github.com/owner/repo" });
 
@@ -137,4 +139,5 @@ test("config mistakes are explained", (t) => {
   check({ docs: [{ ...doc, source: { repo: "https://github.com/o/r" } }] }, /owner\/name/);
   check({ docs: [{ ...doc, source: { repo: "o/r", path: "../x" } }] }, /inside the repository/);
   check({ docs: [doc, doc] }, /its own "slug"/);
+  check({ docs: [{ ...doc, category: "stuff" }] }, /"category" must be one of/);
 });

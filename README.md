@@ -29,6 +29,7 @@ To let others find your pack, add the topic `devdocs-pack` to your repository (t
     {
       "name": "GitHub Pages",
       "slug": "github_pages",
+      "category": "services",
       "source": {
         "repo": "github/docs",
         "path": "content/pages",
@@ -49,6 +50,7 @@ To let others find your pack, add the topic `devdocs-pack` to your repository (t
 | `name` (of a doc) | Shown in DevDocs' sidebar. |
 | `slug` | The doc's short name in addresses: lower-case letters, digits, `_` and `.` only (no hyphens), e.g. `github_pages`. Add a version after `~`: `vue~3`. |
 | `version` | Optional, e.g. `"3"`, shown after the name. |
+| `category` | Optional: where DevDocs lists the doc. One of `languages`, `web`, `frameworks`, `libraries`, `testing`, `tools`, `databases`, `ai`, `services`, `other` (the default). |
 | `source.repo` | The GitHub repository the docs are in, as `owner/name`. |
 | `source.ref` | Optional: a branch or tag. The default branch otherwise. |
 | `source.path` | The folder of the docs in the repository. Leave it out if the docs are the whole repository. |

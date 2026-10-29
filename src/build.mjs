@@ -12,6 +12,9 @@ import { renderLiquid } from "./liquid.mjs";
 import { escapeHtml, renderInline, renderMarkdown, splitFrontMatter, textOf } from "./markdown.mjs";
 import { fetchSource } from "./source.mjs";
 
+/** The categories DevDocs groups docs in (its app/categories.js). */
+export const CATEGORIES = ["languages", "web", "frameworks", "libraries", "testing", "tools", "databases", "ai", "services", "other"];
+
 /** DevDocs' slug format: no hyphen (it starts a type in URLs) or slash. */
 const SLUG_RGX = /^[a-z0-9_.]+(?:~[a-z0-9_.]+)?$/;
 const MARKDOWN_RGX = /\.(md|markdown|mdx)$/i;
@@ -31,6 +34,7 @@ const MARKDOWN_RGX = /\.(md|markdown|mdx)$/i;
  *   link to each page's original.
  * @property {string} [attribution] Copyright and licence, shown on each page.
  * @property {Record<string, string>} [links] `home` and `code` URLs.
+ * @property {string} [category] Where DevDocs lists the doc: one of CATEGORIES.
  */
 
 /**
@@ -66,6 +70,9 @@ export function readConfig(file) {
     if (!doc.name) throw new Error(`${where}: needs a "name".`);
     if (!SLUG_RGX.test(doc.slug || "")) {
       throw new Error(`${where}: "slug" must be lower-case letters, digits, "_" or ".", e.g. "github_pages", with an optional version after "~".`);
+    }
+    if (doc.category !== undefined && !CATEGORIES.includes(doc.category)) {
+      throw new Error(`${where}: "category" must be one of ${CATEGORIES.join(", ")}.`);
     }
     if (!doc.source || (!doc.source.repo && !doc.source.dir)) {
       throw new Error(`${where}: "source" needs a "repo" (owner/name on GitHub) or a "dir".`);
@@ -135,6 +142,7 @@ export function buildPack(config, { outDir, baseDir, cacheDir, log = () => {}, r
       db_hash: hash,
       links: doc.links || defaultLinks(doc, source),
       ...(doc.attribution && { attribution: doc.attribution }),
+      ...(doc.category && { category: doc.category }),
     });
     log(`${doc.name}: ${Object.keys(built.pages).length} pages, ${built.index.entries.length} entries`);
   }
