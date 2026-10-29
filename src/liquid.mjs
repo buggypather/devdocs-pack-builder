@@ -200,9 +200,7 @@ function dataReference(reference, context, depth) {
   if (kind === "reusables") {
     const file = join(context.dataDir, "reusables", ...keys.slice(0, -1), `${keys.at(-1)}.md`);
     return existsSync(file)
-      ? renderLiquid(readFileSync(file, "utf8").replace(/
-?/g, "
-").trimEnd(), context, depth + 1)
+      ? renderLiquid(readFileSync(file, "utf8").replace(/\r\n?/g, "\n").trimEnd(), context, depth + 1)
       : "";
   }
 
