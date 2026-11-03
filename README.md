@@ -20,6 +20,12 @@ The pack is rebuilt every Monday, and whenever you change the config. To rebuild
 To let others find your pack, add the topic `devdocs-pack` to your repository (the gear next to
 **About** on its page).
 
+## Examples
+
+- [devdocs-pack-firebase](https://github.com/buggypather/devdocs-pack-firebase): the Firebase
+  JavaScript SDK's API reference, from the Markdown in
+  [firebase/firebase-js-sdk](https://github.com/firebase/firebase-js-sdk/tree/main/docs-devsite).
+
 ## pack.config.json
 
 ```json
@@ -56,6 +62,8 @@ To let others find your pack, add the topic `devdocs-pack` to your repository (t
 | `source.path` | The folder of the docs in the repository. Leave it out if the docs are the whole repository. |
 | `source.root` | Optional: the folder that links starting with `/` are relative to. For GitHub's docs, `content`. Defaults to `path`. |
 | `source.data` | Optional: the folder with the variables and snippets that `{% data ... %}` tags use. Defaults to `data`. |
+| `source.toc` | Optional: a table of contents in the `_toc.yaml` form of Google's developer sites, in the docs' folder. It sets the pages' order, and each top item becomes a sidebar group. |
+| `entries` | Optional: what's searchable besides each page. `sections` (the default) adds each `##` section; `api` is for API references made by [API Documenter](https://api-extractor.com/pages/setup/generating_docs/), and adds each function and member, e.g. `getAuth()` and `User.reload()`. |
 | `versions` | For GitHub's docs: which product's content to keep where pages differ. `fpt` is GitHub.com (Free, Pro, Team); `ghec` Enterprise Cloud; `ghes` Enterprise Server. Defaults to `["fpt"]`. |
 | `site` | Optional: where the docs are published. Links to pages outside the doc go there, and each page links to its original. |
 | `attribution` | The docs' copyright and licence, shown at the bottom of each page. **Check that the licence allows sharing**, and say who wrote them. |
@@ -69,6 +77,8 @@ To let others find your pack, add the topic `devdocs-pack` to your repository (t
   that orders a folder's pages. Pages without front matter take their title from their first `#` heading.
 - The template tags of GitHub's docs and other Jekyll sites: `{% data %}` variables and snippets,
   `{% ifversion %}`, `{% raw %}` and icons.
+- Headings with their own ids, `## Setup {#setup}` or `{:#setup}`, as Jekyll, Hugo and Google's sites write them.
+- The settings lines (`Project:`, `Book:`) at the top of pages from Google's developer sites.
 - Links between pages, which stay inside DevDocs; images, which load from GitHub.
 
 Each page becomes a search entry, and so does each `##` section. Pages are grouped in the sidebar

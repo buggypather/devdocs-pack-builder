@@ -153,3 +153,62 @@ test("verbose output names each page and each link that leaves the doc", (t) => 
   assert.ok(lines.some((line) => /^ {2}link \/\S+ isn't in this doc: to the site$/.test(line)), "a link to the site");
   assert.equal(lines.length, new Set(lines).size, "nothing is logged twice");
 });
+
+test("an API Documenter reference: its table of contents, functions and members", (t) => {
+  const out = mkdtempSync(join(tmpdir(), "pack-"));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+  const reference = {
+    name: "Reference",
+    docs: [
+      {
+        name: "Firebase",
+        slug: "firebase",
+        entries: "api",
+        source: { dir: "reference", repo: "owner/sdk", path: "docs", toc: "_toc.yaml" },
+      },
+    ],
+  };
+  buildPack(readConfig(writeConfig(out, reference)), { outDir: out, baseDir: FIXTURES, cacheDir: join(out, ".cache") });
+
+  const index = JSON.parse(read(out, "firebase/index.json"));
+  // Ordered and grouped as the table of contents says.
+  assert.deepEqual(index.entries.map((entry) => [entry.name, entry.path, entry.type]), [
+    ["@firebase/auth", "auth", "auth"],
+    ["getAuth()", "auth#getauth_cf608e1", "auth"],
+    ["User", "auth.user", "auth"],
+    ["User.emailVerified", "auth.user#useremailverified", "auth"],
+    ["User.getIdToken()", "auth.user#usergetidtoken", "auth"],
+    ["User.reload()", "auth.user#userreload", "auth"],
+    ["@firebase/app", "app", "app"],
+  ]);
+  assert.deepEqual(index.types.map((type) => [type.name, type.count]), [["auth", 6], ["app", 1]]);
+
+  const pages = JSON.parse(read(out, "firebase/db.json"));
+  // The site's settings and the comment aren't shown; the heading keeps its own id.
+  assert.ok(!pages.index.includes("Project:"));
+  assert.ok(!pages.index.includes("DO NOT EDIT"));
+  assert.ok(pages.auth.includes('<h3 id="getauth_cf608e1">getAuth(app)</h3>'));
+  assert.ok(pages.auth.includes('<a href="auth.user#userreload">User.reload()</a>'));
+  // Links to the top of a page go to the page.
+  assert.ok(pages.index.includes('<a href="auth">@firebase/auth</a> <a href="auth.user">User</a>'));
+});
+
+test("a missing table of contents is explained", (t) => {
+  const out = mkdtempSync(join(tmpdir(), "pack-"));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+  const reference = {
+    docs: [{ name: "Firebase", slug: "firebase", source: { dir: "reference", path: "docs", toc: "nope.yaml" } }],
+  };
+  assert.throws(
+    () => buildPack(reference, { outDir: out, baseDir: FIXTURES, cacheDir: join(out, ".cache") }),
+    /There's no table of contents at .*nope\.yaml\. Check "toc" in pack\.config\.json\./,
+  );
+  assert.throws(() => readConfig(writeConfig(out, { docs: [{ ...reference.docs[0], entries: "all" }] })), /"entries" must be one of sections, api/);
+});
+
+/** @param {string} dir @param {object} value */
+function writeConfig(dir, value) {
+  const file = join(dir, "config.json");
+  writeFileSync(file, JSON.stringify(value));
+  return file;
+}

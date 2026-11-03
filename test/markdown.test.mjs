@@ -52,3 +52,14 @@ test("images are resolved, in Markdown and in HTML", () => {
   assert.match(render("![Alt](a/b.png)"), /<img src="https:\/\/img\/a\/b.png" alt="Alt">/);
   assert.match(render('<img src="/x.png" alt="y">'), /src="https:\/\/img\/\/x.png"/);
 });
+
+test("a heading can give its own id, as Jekyll and Google's sites write it", () => {
+  const { html, headings } = renderMarkdown("## getAuth(app) {:#getauth_cf608e1}\n\n## Setup {#setup .wide}\n\n## Plain", options);
+  assert.ok(html.includes('<h2 id="getauth_cf608e1">getAuth(app)</h2>'));
+  assert.ok(html.includes('<h2 id="setup">Setup</h2>'));
+  assert.deepEqual(headings.map((h) => [h.id, h.text, h.explicit]), [
+    ["getauth_cf608e1", "getAuth(app)", true],
+    ["setup", "Setup", true],
+    ["plain", "Plain", false],
+  ]);
+});

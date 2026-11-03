@@ -16,7 +16,11 @@ import { parse as parseYaml } from "yaml";
  * @property {string} id
  * @property {string} text
  * @property {number} depth
+ * @property {boolean} explicit Whether the page gave the id (`{#id}`).
  */
+
+/** A heading's own id at its end, as Jekyll, Hugo and Google's sites write it: `{#id}` or `{:#id}`. */
+const HEADING_ID_RGX = /\s*\{:?\s*#([\w.:-]+)[^}]*\}\s*$/;
 
 const ALERTS = {
   NOTE: "Note",
@@ -63,10 +67,12 @@ export function renderMarkdown(markdown, options) {
     gfm: true,
     renderer: {
       heading({ tokens, depth }) {
-        const inner = this.parser.parseInline(tokens);
+        let inner = this.parser.parseInline(tokens);
+        const own = inner.match(HEADING_ID_RGX);
+        if (own) inner = inner.slice(0, own.index);
         const text = textOf(inner);
-        const id = slugger(text);
-        headings.push({ id, text, depth });
+        const id = own ? own[1] : slugger(text);
+        headings.push({ id, text, depth, explicit: !!own });
         return `<h${depth} id="${escapeHtml(id)}">${inner}</h${depth}>\n`;
       },
 

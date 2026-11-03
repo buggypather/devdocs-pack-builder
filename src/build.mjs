@@ -8,6 +8,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, posix } from "node:path";
+import { parse as parseYaml } from "yaml";
 import { renderLiquid } from "./liquid.mjs";
 import { escapeHtml, renderInline, renderMarkdown, splitFrontMatter, textOf } from "./markdown.mjs";
 import { fetchSource } from "./source.mjs";
@@ -18,16 +19,27 @@ export const CATEGORIES = ["languages", "web", "frameworks", "libraries", "testi
 /** DevDocs' slug format: no hyphen (it starts a type in URLs) or slash. */
 const SLUG_RGX = /^[a-z0-9_.]+(?:~[a-z0-9_.]+)?$/;
 const MARKDOWN_RGX = /\.(md|markdown|mdx)$/i;
+const ENTRY_KINDS = ["sections", "api"];
+/** The settings at the top of a page on Google's developer sites, before a blank line. */
+const DEVSITE_HEADER_RGX = /^(?:(?:Project|Book|page_type|description|keywords|robots)\s*:[^\n]*\n)+\n/i;
+/** The kind API Documenter puts after a page's name: "User interface". */
+const API_KIND_RGX = / (class|interface|namespace|enum|type|variable|function|package)$/i;
+const API_TOP_RGX = /^#[\w.-]+_(package|class|interface|namespace|enum|typealias|variable|function)$/;
 
 /**
  * @typedef {object} DocConfig
  * @property {string} name
  * @property {string} slug
  * @property {string} [version]
- * @property {{ repo?: string, ref?: string, dir?: string, path?: string, root?: string, data?: string }} source
+ * @property {{ repo?: string, ref?: string, dir?: string, path?: string, root?: string, data?: string, toc?: string }} source
  *   `path` is the documentation's folder in the repository; `root` the folder
  *   that links starting with "/" are relative to (GitHub's docs: `content`);
- *   `data` the folder of Liquid variables and reusables (`data`, if it exists).
+ *   `data` the folder of Liquid variables and reusables (`data`, if it exists);
+ *   `toc` a table of contents in Google's `_toc.yaml` form, in `path`, that
+ *   orders the pages and groups them in the sidebar.
+ * @property {"sections" | "api"} [entries] What's searchable besides each
+ *   page: its `##` sections (the default), or, for API references made by
+ *   API Documenter, each function and member.
  * @property {string[]} [versions] For GitHub's docs: the versions to show.
  * @property {string} [site] The published documentation, e.g.
  *   `https://docs.github.com/en`, for links to pages outside the doc and the
@@ -80,7 +92,10 @@ export function readConfig(file) {
     if (doc.source.repo && !/^[\w.-]+\/[\w.-]+$/.test(doc.source.repo)) {
       throw new Error(`${where}: "repo" should look like "owner/name", e.g. "github/docs".`);
     }
-    for (const key of ["path", "root", "data"]) {
+    if (doc.entries !== undefined && !ENTRY_KINDS.includes(doc.entries)) {
+      throw new Error(`${where}: "entries" must be one of ${ENTRY_KINDS.join(", ")}.`);
+    }
+    for (const key of ["path", "root", "data", "toc"]) {
       if (doc.source[key] && doc.source[key].split("/").includes("..")) {
         throw new Error(`${where}: "${key}" must be inside the repository.`);
       }
@@ -186,7 +201,15 @@ export function buildDoc(doc, source, debug = () => {}) {
     pages.unshift({ file: posix.join(docPath, "index.md"), path: "index", isFolder: true, data: {}, body: "", title: doc.name, shortTitle: doc.name, intro: "" });
   }
   const byFile = new Map(pages.map((page) => [stripExtension(page.file), page]));
-  const ordered = orderPages(pages, docPath);
+  const toc = doc.source.toc ? readToc(join(folder, clean(doc.source.toc)), pages, docPath) : null;
+  if (toc) debug(`${toc.order.length} pages in the table of contents`);
+  const ordered = [
+    ...new Set([
+      ...pages.filter((page) => page.path === "index"),
+      ...(toc ? toc.order : []),
+      ...orderPages(pages, docPath),
+    ]),
+  ];
   debug(`${pages.length} Markdown pages in ${docPath || "the repository"}${liquid.dataDir ? `; Liquid data from ${liquid.dataDir}` : "; no Liquid data folder"}`);
 
   /** @param {string} href */
@@ -211,7 +234,9 @@ export function buildDoc(doc, source, debug = () => {}) {
       resolveLink: (href) => {
         if (!href || href.startsWith("#") || /^[a-z][a-z0-9+.-]*:|^\/\//i.test(href)) return href;
         const target = findPage(href, page);
-        const hash = href.includes("#") ? href.slice(href.indexOf("#")) : "";
+        let hash = href.includes("#") ? href.slice(href.indexOf("#")) : "";
+        // API Documenter names the top of a page "#userinfo_interface"; there's no such heading.
+        if (doc.entries === "api" && API_TOP_RGX.test(hash)) hash = "";
         if (target) return relativeLink(page.path, target.path) + hash;
         if (href.startsWith("/") && doc.site) {
           debug(`  link ${href} isn't in this doc: to the site`);
@@ -245,12 +270,27 @@ export function buildDoc(doc, source, debug = () => {}) {
       attribution(doc, page, root);
 
     if (page.path === "index") continue;
-    const type = typeOf(page, pages, doc.name);
-    types.set(type, (types.get(type) || 0) + 1);
-    entries.push({ name: page.title, path: page.path, type });
-    for (const heading of headings.filter((h) => h.depth === 2)) {
-      entries.push({ name: `${page.title}: ${heading.text}`, path: `${page.path}#${heading.id}`, type });
-      types.set(type, types.get(type) + 1);
+    const type = toc?.groups.get(page) || typeOf(page, pages, doc.name);
+    /** @param {string} name @param {string} path */
+    const addEntry = (name, path) => {
+      entries.push({ name, path, type });
+      types.set(type, (types.get(type) || 0) + 1);
+    };
+    if (doc.entries === "api") {
+      // "User interface" is "User"; its members are "User.reload()", and a
+      // package's functions have ids of their own: "getAuth(app) {:#getauth_cf608e1}".
+      const name = page.title.replace(API_KIND_RGX, "");
+      addEntry(name, page.path);
+      for (const heading of headings) {
+        if (heading.depth <= 4 && (heading.explicit || heading.text.startsWith(`${name}.`))) {
+          addEntry(heading.text.replace(/([\w$])\(.*\)$/, "$1()"), `${page.path}#${heading.id}`);
+        }
+      }
+    } else {
+      addEntry(page.title, page.path);
+      for (const heading of headings.filter((h) => h.depth === 2)) {
+        addEntry(`${page.title}: ${heading.text}`, `${page.path}#${heading.id}`);
+      }
     }
   }
 
@@ -285,6 +325,7 @@ function readPage(file, docPath, repoDir, liquid, docName) {
 
   // Windows line endings would throw off the line-based handling of tags.
   let { data, body } = splitFrontMatter(readFileSync(file, "utf8").replace(/\r\n?/g, "\n"));
+  body = body.replace(DEVSITE_HEADER_RGX, "");
   // MDX: imports and exports aren't content.
   if (/\.mdx$/i.test(file)) body = body.replace(/^(import|export)\s.*$/gm, "");
   body = renderLiquid(body, liquid);
@@ -306,6 +347,56 @@ function readPage(file, docPath, repoDir, liquid, docName) {
   const intro = data.intro ? renderLiquid(String(data.intro), liquid) : "";
 
   return { file: repoFile, path, isFolder: isIndex, data, body, title, shortTitle, intro };
+}
+
+/**
+ * Reads a table of contents in the form of Google's developer sites
+ * (`toc: [{ title, path, section: [...] }]`): its order, and each page's
+ * group, the title of the top item it's under.
+ *
+ * @param {string} file Absolute path.
+ * @param {Page[]} pages
+ * @param {string} docPath
+ * @returns {{ order: Page[], groups: Map<Page, string> }}
+ */
+function readToc(file, pages, docPath) {
+  let data;
+  try {
+    data = parseYaml(readFileSync(file, "utf8"));
+  } catch (error) {
+    throw new Error(
+      error.code === "ENOENT"
+        ? `There's no table of contents at ${file}. Check "toc" in pack.config.json.`
+        : `The table of contents ${file} isn't valid YAML: ${error.message}`,
+    );
+  }
+  const items = Array.isArray(data?.toc) ? data.toc : Array.isArray(data) ? data : [];
+  const byName = new Map(pages.map((page) => [stripExtension(docPath ? page.file.slice(docPath.length + 1) : page.file), page]));
+  // Its paths are the site's ("/docs/reference/js/auth.user.md"): the end that names a page counts.
+  const find = (path) => {
+    const segments = stripExtension(clean(String(path))).split("/");
+    for (let i = 0; i < segments.length; i++) {
+      const page = byName.get(segments.slice(i).join("/"));
+      if (page) return page;
+    }
+    return null;
+  };
+
+  /** @type {Page[]} */
+  const order = [];
+  /** @type {Map<Page, string>} */
+  const groups = new Map();
+  const walk = (item, group) => {
+    if (!item || typeof item !== "object") return;
+    const page = item.path ? find(item.path) : null;
+    if (page && !groups.has(page)) {
+      groups.set(page, group);
+      order.push(page);
+    }
+    for (const child of Array.isArray(item.section) ? item.section : []) walk(child, group);
+  };
+  for (const item of items) walk(item, String(item?.title ?? "").trim());
+  return { order, groups };
 }
 
 /**
