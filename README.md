@@ -1,7 +1,7 @@
 # DevDocs pack builder
 
 Turns documentation written in Markdown, in any public GitHub repository, into a
-[doc pack](https://github.com/buggypather/devdocs/blob/custom-doc-packs/docs/doc-packs.md)
+[doc pack](https://github.com/buggypather/devdocs/blob/main-custom-docs/docs/doc-packs.md)
 that you can add to DevDocs: searchable, readable offline, and updated every week.
 
 It's set up for [GitHub Pages' documentation](https://docs.github.com/en/pages) as an example.
