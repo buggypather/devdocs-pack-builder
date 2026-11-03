@@ -96,9 +96,9 @@ export function readConfig(file) {
  * Builds every doc in the config into `outDir`.
  *
  * @param {{ name?: string, docs: DocConfig[] }} config
- * @param {{ outDir: string, baseDir: string, cacheDir: string, log?: (message: string) => void, repository?: string }} options
+ * @param {{ outDir: string, baseDir: string, cacheDir: string, log?: (message: string) => void, debug?: (message: string) => void, repository?: string }} options
  */
-export function buildPack(config, { outDir, baseDir, cacheDir, log = () => {}, repository }) {
+export function buildPack(config, { outDir, baseDir, cacheDir, log = () => {}, debug = () => {}, repository }) {
   const previous = readPrevious(outDir);
   mkdirSync(outDir, { recursive: true });
   // Everything but the branch's own .git is rebuilt.
@@ -113,8 +113,9 @@ export function buildPack(config, { outDir, baseDir, cacheDir, log = () => {}, r
     // doc is the whole repository.
     const docPath = clean(doc.source.path);
     const folders = docPath ? [docPath, clean(doc.source.data ?? "data")] : null;
-    const source = fetchSource(doc.source, folders, { cacheDir, baseDir });
-    const built = buildDoc(doc, source);
+    debug(`Folders to download: ${folders ? folders.join(", ") : "the whole repository"}`);
+    const source = fetchSource(doc.source, folders, { cacheDir, baseDir, debug });
+    const built = buildDoc(doc, source, debug);
 
     const docDir = join(outDir, doc.slug);
     for (const [path, html] of Object.entries(built.pages)) {
@@ -144,6 +145,7 @@ export function buildPack(config, { outDir, baseDir, cacheDir, log = () => {}, r
       ...(doc.attribution && { attribution: doc.attribution }),
       ...(doc.category && { category: doc.category }),
     });
+    debug(`db.json is ${Buffer.byteLength(db)} bytes, hash ${hash}${before?.db_hash === hash ? " (unchanged, keeping its date)" : ""}`);
     log(`${doc.name}: ${Object.keys(built.pages).length} pages, ${built.index.entries.length} entries`);
   }
 
@@ -157,9 +159,10 @@ export function buildPack(config, { outDir, baseDir, cacheDir, log = () => {}, r
  *
  * @param {DocConfig} doc
  * @param {import("./source.mjs").Source} source
+ * @param {(message: string) => void} [debug] Told about each page and each link that leaves the doc.
  * @returns {{ pages: Record<string, string>, index: { entries: object[], types: object[] } }}
  */
-export function buildDoc(doc, source) {
+export function buildDoc(doc, source, debug = () => {}) {
   const docPath = clean(doc.source.path);
   const root = clean(doc.source.root ?? doc.source.path);
   const dataDir = join(source.dir, clean(doc.source.data ?? "data"));
@@ -184,6 +187,7 @@ export function buildDoc(doc, source) {
   }
   const byFile = new Map(pages.map((page) => [stripExtension(page.file), page]));
   const ordered = orderPages(pages, docPath);
+  debug(`${pages.length} Markdown pages in ${docPath || "the repository"}${liquid.dataDir ? `; Liquid data from ${liquid.dataDir}` : "; no Liquid data folder"}`);
 
   /** @param {string} href */
   const findPage = (href, page) => {
@@ -202,18 +206,24 @@ export function buildDoc(doc, source) {
   const types = new Map();
 
   for (const page of ordered) {
+    debug(`${page.file} -> ${page.path}: "${page.title}"`);
     const options = {
       resolveLink: (href) => {
         if (!href || href.startsWith("#") || /^[a-z][a-z0-9+.-]*:|^\/\//i.test(href)) return href;
         const target = findPage(href, page);
         const hash = href.includes("#") ? href.slice(href.indexOf("#")) : "";
         if (target) return relativeLink(page.path, target.path) + hash;
-        if (href.startsWith("/") && doc.site) return doc.site.replace(/\/$/, "") + href;
+        if (href.startsWith("/") && doc.site) {
+          debug(`  link ${href} isn't in this doc: to the site`);
+          return doc.site.replace(/\/$/, "") + href;
+        }
         if (source.repo) {
           // A file of the repository that isn't a page, e.g. an example.
           const file = posix.join(posix.dirname(page.file), href.split("#")[0]);
+          debug(`  link ${href} isn't a page: to GitHub`);
           return `https://github.com/${source.repo}/blob/${source.ref}/${file}${hash}`;
         }
+        debug(`  link ${href} isn't a page: left as it is`);
         return href;
       },
       resolveImage: (src) => {

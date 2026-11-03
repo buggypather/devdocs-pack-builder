@@ -20,11 +20,20 @@ import { join, resolve } from "node:path";
  * @param {{ repo?: string, ref?: string, dir?: string }} source From the config.
  * @param {string[] | null} folders Paths inside the repository, or `null`
  *   for all of it.
- * @param {{ cacheDir: string, baseDir: string }} options
+ * @param {{ cacheDir: string, baseDir: string, debug?: (message: string) => void }} options
  * @returns {Source}
  */
-export function fetchSource(source, folders, { cacheDir, baseDir }) {
+export function fetchSource(source, folders, { cacheDir, baseDir, debug = () => {} }) {
+  /** @param {string[]} args */
+  const git = (args) => {
+    const started = Date.now();
+    const output = runGit(args);
+    debug(`git ${args.join(" ")} (${Date.now() - started} ms)`);
+    return output;
+  };
+
   if (source.dir) {
+    debug(`Using the folder ${resolve(baseDir, source.dir)}`);
     return { dir: resolve(baseDir, source.dir), repo: source.repo || null, ref: source.ref || "HEAD", commit: null };
   }
 
@@ -46,14 +55,16 @@ export function fetchSource(source, folders, { cacheDir, baseDir }) {
   }
   git(["-C", dir, "checkout", "--force"]);
 
-  return { dir, repo, ref: source.ref || "HEAD", commit: git(["-C", dir, "rev-parse", "HEAD"]).trim() };
+  const commit = git(["-C", dir, "rev-parse", "HEAD"]).trim();
+  debug(`Checked out ${repo} at ${commit} into ${dir}`);
+  return { dir, repo, ref: source.ref || "HEAD", commit };
 }
 
 /**
  * @param {string[]} args
  * @returns {string} What git printed.
  */
-function git(args) {
+function runGit(args) {
   const result = spawnSync("git", args, { encoding: "utf8" });
   if (result.error) {
     throw new Error(`Couldn't run git (${result.error.message}). Is Git installed?`);

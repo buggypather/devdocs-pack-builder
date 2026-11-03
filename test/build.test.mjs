@@ -141,3 +141,15 @@ test("config mistakes are explained", (t) => {
   check({ docs: [doc, doc] }, /its own "slug"/);
   check({ docs: [{ ...doc, category: "stuff" }] }, /"category" must be one of/);
 });
+
+test("verbose output names each page and each link that leaves the doc", (t) => {
+  const out = mkdtempSync(join(tmpdir(), "pack-"));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+  const lines = [];
+  buildPack(config, { outDir: out, baseDir: FIXTURES, cacheDir: join(out, ".cache"), debug: (line) => lines.push(line) });
+
+  assert.ok(lines.some((line) => /^Using the folder .*repo$/.test(line)), "where the source is");
+  assert.ok(lines.includes('content/guide/first.md -> first: "First steps"'), lines.join("\n"));
+  assert.ok(lines.some((line) => /^ {2}link \/\S+ isn't in this doc: to the site$/.test(line)), "a link to the site");
+  assert.equal(lines.length, new Set(lines).size, "nothing is logged twice");
+});
