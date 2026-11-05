@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -212,3 +212,34 @@ function writeConfig(dir, value) {
   writeFileSync(file, JSON.stringify(value));
   return file;
 }
+
+test("Gitiles docs: [TOC] lines are dropped and originals keep their file names", (t) => {
+  const repo = mkdtempSync(join(tmpdir(), "repo-"));
+  const out = mkdtempSync(join(tmpdir(), "pack-"));
+  t.after(() => {
+    rmSync(repo, { recursive: true, force: true });
+    rmSync(out, { recursive: true, force: true });
+  });
+  mkdirSync(join(repo, "docs"));
+  writeFileSync(join(repo, "docs", "build.md"), "# Building\n\n[TOC]\n\n## Steps\n\nRun it.\n");
+  buildPack(
+    {
+      name: "Gitiles",
+      docs: [
+        {
+          name: "Tool",
+          slug: "tool",
+          source: { dir: repo, path: "docs", root: "" },
+          site: "https://example.googlesource.com/tool/+/main",
+          siteFiles: true,
+          attribution: "&copy; Authors",
+        },
+      ],
+    },
+    { outDir: out, baseDir: repo, cacheDir: join(out, ".cache") },
+  );
+
+  const page = read(out, "tool/build.html");
+  assert.ok(!page.includes("[TOC]"), page);
+  assert.ok(page.includes('href="https://example.googlesource.com/tool/+/main/docs/build.md"'), page);
+});

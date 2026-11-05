@@ -22,6 +22,8 @@ const MARKDOWN_RGX = /\.(md|markdown|mdx)$/i;
 const ENTRY_KINDS = ["sections", "api"];
 /** The settings at the top of a page on Google's developer sites, before a blank line. */
 const DEVSITE_HEADER_RGX = /^(?:(?:Project|Book|page_type|description|keywords|robots)\s*:[^\n]*\n)+\n/i;
+/** Gitiles (googlesource.com) puts a table of contents where a line says `[TOC]`; DevDocs has none. */
+const GITILES_TOC_RGX = /^\[TOC\][ \t]*$/gm;
 /** The kind API Documenter puts after a page's name: "User interface". */
 const API_KIND_RGX = / (class|interface|namespace|enum|type|variable|function|package)$/i;
 const API_TOP_RGX = /^#[\w.-]+_(package|class|interface|namespace|enum|typealias|variable|function)$/;
@@ -44,6 +46,9 @@ const API_TOP_RGX = /^#[\w.-]+_(package|class|interface|namespace|enum|typealias
  * @property {string} [site] The published documentation, e.g.
  *   `https://docs.github.com/en`, for links to pages outside the doc and the
  *   link to each page's original.
+ * @property {boolean} [siteFiles] Whether `site` shows the repository's files
+ *   as they are, like the source browser on googlesource.com, so a page's
+ *   original is its file's path, `.md` and all.
  * @property {string} [attribution] Copyright and licence, shown on each page.
  * @property {Record<string, string>} [links] `home` and `code` URLs.
  * @property {string} [category] Where DevDocs lists the doc: one of CATEGORIES.
@@ -325,7 +330,7 @@ function readPage(file, docPath, repoDir, liquid, docName) {
 
   // Windows line endings would throw off the line-based handling of tags.
   let { data, body } = splitFrontMatter(readFileSync(file, "utf8").replace(/\r\n?/g, "\n"));
-  body = body.replace(DEVSITE_HEADER_RGX, "");
+  body = body.replace(DEVSITE_HEADER_RGX, "").replace(GITILES_TOC_RGX, "");
   // MDX: imports and exports aren't content.
   if (/\.mdx$/i.test(file)) body = body.replace(/^(import|export)\s.*$/gm, "");
   body = renderLiquid(body, liquid);
@@ -477,8 +482,8 @@ function childList(page, ordered, options) {
  */
 function attribution(doc, page, root) {
   if (!doc.attribution && !doc.site) return "";
-  let urlPath = stripExtension(page.file).replace(/\/(index|readme)$/i, "");
-  if (root && (urlPath === root || urlPath.startsWith(`${root}/`))) urlPath = urlPath.slice(root.length);
+  let urlPath = doc.siteFiles ? page.file : stripExtension(page.file).replace(/\/(index|readme)$/i, "");
+  if (!doc.siteFiles && root && (urlPath === root || urlPath.startsWith(`${root}/`))) urlPath = urlPath.slice(root.length);
   const original = doc.site ? doc.site.replace(/\/$/, "") + encodeURI(urlPath.replace(/^\/?/, "/")) : "";
   return (
     `<div class="_attribution">\n  <p class="_attribution-p">\n    ${doc.attribution || ""}` +

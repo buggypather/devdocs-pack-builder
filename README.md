@@ -66,6 +66,7 @@ To let others find your pack, add the topic `devdocs-pack` to your repository (t
 | `entries` | Optional: what's searchable besides each page. `sections` (the default) adds each `##` section; `api` is for API references made by [API Documenter](https://api-extractor.com/pages/setup/generating_docs/), and adds each function and member, e.g. `getAuth()` and `User.reload()`. |
 | `versions` | For GitHub's docs: which product's content to keep where pages differ. `fpt` is GitHub.com (Free, Pro, Team); `ghec` Enterprise Cloud; `ghes` Enterprise Server. Defaults to `["fpt"]`. |
 | `site` | Optional: where the docs are published. Links to pages outside the doc go there, and each page links to its original. |
+| `siteFiles` | Optional: `true` when `site` is a source browser that shows the repository's files as they are, such as googlesource.com (Gitiles), so each page's original link keeps its `.md`. Gitiles' `[TOC]` lines are always dropped. |
 | `attribution` | The docs' copyright and licence, shown at the bottom of each page. **Check that the licence allows sharing**, and say who wrote them. |
 | `links` | Optional: `{"home": "...", "code": "..."}` for the doc's Homepage and Source code links. Made from `site` and `repo` otherwise. |
 
