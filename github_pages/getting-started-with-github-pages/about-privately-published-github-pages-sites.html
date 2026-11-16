@@ -1,0 +1,47 @@
+<h1>About privately published GitHub Pages sites</h1>
+<p>A privately published GitHub Pages site is only available to people with read access to its repository. Learn how access and URLs work for these sites, and what happens to them if your organization&#39;s plan changes.</p>
+<h2 id="about-access-control-for-github-pages-sites">About access control for GitHub Pages sites</h2>
+<p>With access control for GitHub Pages, you can restrict access to your project site by publishing the site privately. A privately published site can only be accessed by people with read access to the repository the site is published from. You can use privately published sites to share your internal documentation or knowledge base with members of your enterprise.</p>
+<blockquote>
+<p><strong>Note:</strong> To publish a GitHub Pages site privately, your organization must use GitHub Enterprise Cloud. For more information about how you can try GitHub Enterprise Cloud for free, see <a href="https://docs.github.com/en/admin/overview/setting-up-a-trial-of-github-enterprise-cloud">Setting up a trial of GitHub Enterprise Cloud</a>.</p>
+</blockquote>
+<p>If your enterprise uses Enterprise Managed Users, GitHub Pages sites can only be published as private, and all GitHub Pages sites are only accessible to other enterprise members. For more information about Enterprise Managed Users, see <a href="github-pages-limits#limits-for-enterprise-managed-users">GitHub Pages limits</a>.</p>
+<p>If your organization uses GitHub Enterprise Cloud without Enterprise Managed Users, you can choose to publish your project sites privately or publicly to anyone on the internet.</p>
+<p>Access control is available for project sites published from a private or internal repository that the organization owns. You cannot manage access control for an organization site. For more information about the types of GitHub Pages sites, see <a href="what-is-github-pages#types-of-github-pages-sites">What is GitHub Pages?</a>.</p>
+<h2 id="about-subdomains-for-privately-published-sites">About subdomains for privately published sites</h2>
+<p>Privately published sites are available at a different subdomain than publicly published sites. This ensures that your GitHub Pages site is secure from the moment it&#39;s published:</p>
+<ul>
+<li>Every subdomain of <code>*.pages.github.io</code> is automatically secured with a TLS certificate, and HSTS is enforced so that browsers always serve the page over HTTPS.</li>
+<li>Each privately published site uses a unique subdomain, so other repositories in your organization cannot publish content on the same origin as the site. This protects your site from <a href="https://github.blog/2013-04-09-yummy-cookies-across-domains/">cookie tossing</a>. This is also why GitHub Pages sites are not hosted on the <code>github.com</code> domain.</li>
+</ul>
+<p>You can see your site&#39;s unique subdomain in the &quot;Pages&quot; tab of your repository settings. If you&#39;re using a static site generator configured to build the site with the repository name as a path, you may need to update the settings for the static site generator when changing the site to private. For more information, see <a href="../configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site#configuring-a-subdomain">Managing a custom domain for your GitHub Pages site</a> or the documentation for your static site generator.</p>
+<p>If you change a privately published site to public, the site&#39;s URL changes, unless the site uses a custom domain.</p>
+<p>To use a shorter and more memorable domain for your privately published site, you can configure a custom domain. For more information, see <a href="../configuring-a-custom-domain-for-your-github-pages-site">Configuring a custom domain for your GitHub Pages site</a>.</p>
+<h2 id="privately-published-sites-after-a-plan-change">Privately published sites after a plan change</h2>
+<p>If your organization stops using GitHub Enterprise Cloud, for example because the organization is removed from your enterprise, GitHub keeps existing privately published sites private. A plan change never changes the visibility of a site. However, if a privately published site is deleted, a new site created from the same repository can be public.</p>
+<p>After the change:</p>
+<ul>
+<li>Existing privately published sites stay published privately, at their current URL.</li>
+<li>While a site exists, pushing to its publishing source or running a GitHub Pages workflow doesn&#39;t publish it publicly.</li>
+<li>Each site keeps its unique subdomain. The subdomain is only released if the site is deleted.</li>
+<li>Organization policies for publishing GitHub Pages sites stay in effect. See <a href="https://docs.github.com/en/organizations/managing-organization-settings/managing-the-publication-of-github-pages-sites-for-your-organization">Managing the publication of github pages sites for your organization</a>.</li>
+<li>New sites can&#39;t be published privately.</li>
+<li>You can&#39;t change the visibility of an existing privately published site to public.</li>
+</ul>
+<p>To publish the content publicly, delete the site, then create it again. The new site is public because the organization can no longer publish privately. See <a href="deleting-a-github-pages-site">Deleting a GitHub Pages site</a> and <a href="creating-a-github-pages-site">Creating a GitHub Pages site</a>.</p>
+<p>You can only create the new site if your organization&#39;s plan supports GitHub Pages for the repository and your organization&#39;s policy allows publicly published sites. With GitHub Free for organizations, GitHub Pages is only available for public repositories.</p>
+<p>After a site is deleted, a push to a branch named <code>gh-pages</code> in the repository can also create a new site from that branch automatically, as long as the same plan and policy conditions are met. That new site is public too.</p>
+<blockquote>
+<p><strong>Warning:</strong> Before you delete a privately published site, check whether the repository has a <code>gh-pages</code> branch that a person or an automated process might push to.</p>
+</blockquote>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="changing-the-visibility-of-your-github-pages-site">Changing the visibility of your GitHub Pages site</a></li>
+<li><a href="https://docs.github.com/en/organizations/managing-organization-settings/managing-the-publication-of-github-pages-sites-for-your-organization">Managing the publication of github pages sites for your organization</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; GitHub, Inc.<br>Licensed under the Creative Commons Attribution 4.0 International License.<br>
+    <a href="https://docs.github.com/en/pages/getting-started-with-github-pages/about-privately-published-github-pages-sites" class="_attribution-link">https://docs.github.com/en/pages/getting-started-with-github-pages/about-privately-published-github-pages-sites</a>
+  </p>
+</div>
