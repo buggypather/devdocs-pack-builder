@@ -5,10 +5,10 @@
       "name": "GitHub Pages",
       "slug": "github_pages",
       "type": "simple",
-      "source_commit": "bde6409ff9f0c9810db391f0590d2256e956209d",
-      "mtime": 1794844227,
+      "source_commit": "119b58d202e1499109b838890d36df4ff2b1fd92",
+      "mtime": 1795457618,
       "db_size": 217017,
-      "db_hash": "ba6babea7189ddb8",
+      "db_hash": "c25d6f931f14705c",
       "links": {
         "home": "https://docs.github.com/en",
         "code": "https://github.com/github/docs"
