@@ -1,4 +1,5 @@
-// Builds a DevDocs doc pack from Markdown documentation.
+// Builds a DevDocs doc pack from Markdown documentation (and Jupyter
+// notebooks), or from a Python package's docstrings.
 //
 // The pack is what DevDocs downloads when someone adds it under Preferences >
 // Doc packs: docs.json listing the docs, and per doc a folder with
@@ -11,6 +12,8 @@ import { join, posix } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { renderLiquid } from "./liquid.mjs";
 import { escapeHtml, renderInline, renderMarkdown, splitFrontMatter, textOf } from "./markdown.mjs";
+import { notebookMarkdown } from "./notebook.mjs";
+import { modulePage, readPythonPackage } from "./python.mjs";
 import { fetchSource } from "./source.mjs";
 
 /** The categories DevDocs groups docs in (its app/categories.js). */
@@ -18,8 +21,10 @@ export const CATEGORIES = ["languages", "web", "frameworks", "libraries", "testi
 
 /** DevDocs' slug format: no hyphen (it starts a type in URLs) or slash. */
 const SLUG_RGX = /^[a-z0-9_.]+(?:~[a-z0-9_.]+)?$/;
-const MARKDOWN_RGX = /\.(md|markdown|mdx)$/i;
+/** The pages of a Markdown doc: Markdown, and Jupyter notebooks. */
+const MARKDOWN_RGX = /\.(md|markdown|mdx|ipynb)$/i;
 const ENTRY_KINDS = ["sections", "api"];
+const FORMATS = ["markdown", "python"];
 /** The settings at the top of a page on Google's developer sites, before a blank line. */
 const DEVSITE_HEADER_RGX = /^(?:(?:Project|Book|page_type|description|keywords|robots)\s*:[^\n]*\n)+\n/i;
 /** Gitiles (googlesource.com) puts a table of contents where a line says `[TOC]`; DevDocs has none. */
@@ -39,6 +44,11 @@ const API_TOP_RGX = /^#[\w.-]+_(package|class|interface|namespace|enum|typealias
  *   `data` the folder of Liquid variables and reusables (`data`, if it exists);
  *   `toc` a table of contents in Google's `_toc.yaml` form, in `path`, that
  *   orders the pages and groups them in the sidebar.
+ * @property {"markdown" | "python"} [format] What the pages are made from:
+ *   Markdown files and notebooks (the default), or a Python package's
+ *   modules and docstrings (`path` is the package's folder).
+ * @property {string} [package] For Python: the package's import name, e.g.
+ *   `google.colab`. Made from `path` otherwise.
  * @property {"sections" | "api"} [entries] What's searchable besides each
  *   page: its `##` sections (the default), or, for API references made by
  *   API Documenter, each function and member.
@@ -64,6 +74,8 @@ const API_TOP_RGX = /^#[\w.-]+_(package|class|interface|namespace|enum|typealias
  * @property {string} title
  * @property {string} shortTitle
  * @property {string} intro Markdown, with its Liquid rendered.
+ * @property {string} [group] Its sidebar group, when it has its own (Python modules).
+ * @property {{ name: string, id: string }[]} [entries] Its own search entries (Python modules).
  */
 
 /**
@@ -96,6 +108,15 @@ export function readConfig(file) {
     }
     if (doc.source.repo && !/^[\w.-]+\/[\w.-]+$/.test(doc.source.repo)) {
       throw new Error(`${where}: "repo" should look like "owner/name", e.g. "github/docs".`);
+    }
+    if (doc.format !== undefined && !FORMATS.includes(doc.format)) {
+      throw new Error(`${where}: "format" must be one of ${FORMATS.join(", ")}.`);
+    }
+    if (doc.format === "python" && !doc.package && !doc.source.path) {
+      throw new Error(`${where}: a Python doc needs the package's folder as "path" (or its import name as "package").`);
+    }
+    if (doc.package !== undefined && !/^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$/.test(doc.package)) {
+      throw new Error(`${where}: "package" should be an import name, e.g. "google.colab".`);
     }
     if (doc.entries !== undefined && !ENTRY_KINDS.includes(doc.entries)) {
       throw new Error(`${where}: "entries" must be one of ${ENTRY_KINDS.join(", ")}.`);
@@ -201,7 +222,10 @@ export function buildDoc(doc, source, debug = () => {}) {
 
   // First pass: every page's title, so links can show the title they point to.
   /** @type {Page[]} */
-  const pages = markdownFiles(folder).map((file) => readPage(file, docPath, source.dir, liquid, doc.name));
+  const pages =
+    doc.format === "python"
+      ? pythonPages(doc, folder, docPath)
+      : markdownFiles(folder).map((file) => readPage(file, docPath, source.dir, liquid, doc.name));
   if (!pages.some((page) => page.path === "index")) {
     pages.unshift({ file: posix.join(docPath, "index.md"), path: "index", isFolder: true, data: {}, body: "", title: doc.name, shortTitle: doc.name, intro: "" });
   }
@@ -215,7 +239,7 @@ export function buildDoc(doc, source, debug = () => {}) {
       ...orderPages(pages, docPath),
     ]),
   ];
-  debug(`${pages.length} Markdown pages in ${docPath || "the repository"}${liquid.dataDir ? `; Liquid data from ${liquid.dataDir}` : "; no Liquid data folder"}`);
+  debug(`${pages.length} ${doc.format === "python" ? "Python modules" : "Markdown pages"} in ${docPath || "the repository"}${liquid.dataDir ? `; Liquid data from ${liquid.dataDir}` : "; no Liquid data folder"}`);
 
   /** @param {string} href */
   const findPage = (href, page) => {
@@ -271,17 +295,20 @@ export function buildDoc(doc, source, debug = () => {}) {
       `<h1>${escapeHtml(page.title)}</h1>\n` +
       (intro ? `<p>${intro}</p>\n` : "") +
       body +
-      (children && !body.trim() ? children : "") +
+      (children && (!body.trim() || doc.format === "python") ? children : "") +
       attribution(doc, page, root);
 
     if (page.path === "index") continue;
-    const type = toc?.groups.get(page) || typeOf(page, pages, doc.name);
+    const type = toc?.groups.get(page) || page.group || typeOf(page, pages, doc.name);
     /** @param {string} name @param {string} path */
     const addEntry = (name, path) => {
       entries.push({ name, path, type });
       types.set(type, (types.get(type) || 0) + 1);
     };
-    if (doc.entries === "api") {
+    if (page.entries) {
+      addEntry(page.title, page.path);
+      for (const entry of page.entries) addEntry(entry.name, `${page.path}#${entry.id}`);
+    } else if (doc.entries === "api") {
       // "User interface" is "User"; its members are "User.reload()", and a
       // package's functions have ids of their own: "getAuth(app) {:#getauth_cf608e1}".
       const name = page.title.replace(API_KIND_RGX, "");
@@ -328,14 +355,23 @@ function readPage(file, docPath, repoDir, liquid, docName) {
       .map((segment) => segment.replace(/[^\w.~-]+/g, "-"))
       .join("/") || "index";
 
-  // Windows line endings would throw off the line-based handling of tags.
-  let { data, body } = splitFrontMatter(readFileSync(file, "utf8").replace(/\r\n?/g, "\n"));
-  body = body.replace(DEVSITE_HEADER_RGX, "").replace(GITILES_TOC_RGX, "");
-  // MDX: imports and exports aren't content.
-  if (/\.mdx$/i.test(file)) body = body.replace(/^(import|export)\s.*$/gm, "");
-  body = renderLiquid(body, liquid);
-
-  let title = data.title ? textOf(renderLiquid(String(data.title), liquid)) : "";
+  /** @type {Record<string, any>} */
+  let data = {};
+  let body;
+  let title = "";
+  if (/\.ipynb$/i.test(file)) {
+    // A notebook: no front matter or template tags (its code may well hold {{ }}).
+    ({ title, body } = notebookMarkdown(readFileSync(file, "utf8"), file));
+    title = textOf(title);
+  } else {
+    // Windows line endings would throw off the line-based handling of tags.
+    ({ data, body } = splitFrontMatter(readFileSync(file, "utf8").replace(/\r\n?/g, "\n")));
+    body = body.replace(DEVSITE_HEADER_RGX, "").replace(GITILES_TOC_RGX, "");
+    // MDX: imports and exports aren't content.
+    if (/\.mdx$/i.test(file)) body = body.replace(/^(import|export)\s.*$/gm, "");
+    body = renderLiquid(body, liquid);
+    title = data.title ? textOf(renderLiquid(String(data.title), liquid)) : "";
+  }
   if (!title) {
     // A page without front matter takes its title from its first heading.
     const heading = body.match(/^#[ \t]+(.+?)[ \t#]*$/m);
@@ -352,6 +388,33 @@ function readPage(file, docPath, repoDir, liquid, docName) {
   const intro = data.intro ? renderLiquid(String(data.intro), liquid) : "";
 
   return { file: repoFile, path, isFolder: isIndex, data, body, title, shortTitle, intro };
+}
+
+/**
+ * A Python package's modules as pages.
+ *
+ * @param {DocConfig} doc
+ * @param {string} folder The package's folder on this computer.
+ * @param {string} docPath The package's folder in the repository.
+ * @returns {Page[]}
+ */
+function pythonPages(doc, folder, docPath) {
+  const name = doc.package || docPath.split("/").join(".");
+  return readPythonPackage(folder, name).map((mod) => {
+    const page = modulePage(mod, name);
+    return {
+      file: posix.join(docPath, mod.file),
+      path: page.path,
+      isFolder: page.path === "index" || /(^|\/)__init__\.py$/.test(mod.file),
+      data: {},
+      body: page.body,
+      title: page.path === "index" ? doc.name : page.title,
+      shortTitle: page.title,
+      intro: "",
+      group: page.group,
+      entries: page.entries,
+    };
+  });
 }
 
 /**
