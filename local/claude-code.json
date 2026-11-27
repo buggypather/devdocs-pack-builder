@@ -1,0 +1,20 @@
+{
+  "name": "Claude Code (personal copy)",
+  "docs": [
+    {
+      "name": "Claude Code",
+      "slug": "claude_code",
+      "category": "ai",
+      "source": {
+        "llms": "https://code.claude.com/docs/llms.txt",
+        "only": "https://code.claude.com/docs/en/"
+      },
+      "site": "https://code.claude.com/docs/en",
+      "links": {
+        "home": "https://code.claude.com/docs",
+        "code": "https://github.com/anthropics/claude-code"
+      },
+      "attribution": "&copy; Anthropic PBC. All rights reserved. A personal offline copy: don't publish this pack."
+    }
+  ]
+}

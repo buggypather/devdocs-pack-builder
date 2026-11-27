@@ -131,5 +131,34 @@ npm run build        # writes the pack to pack/
 npm test
 ```
 
-To try the result, serve `pack/` with any web server that sends `Access-Control-Allow-Origin: *`,
-and add its `http://localhost:...` address in DevDocs.
+To try the result, run `npm run serve` (it serves `pack/` at `http://localhost:8765`, with the
+headers DevDocs needs), then add `http://localhost:8765` in DevDocs.
+
+## Docs that aren't on GitHub (personal packs)
+
+Many documentation sites publish every page as Markdown for AI tools, listed in an `llms.txt`
+(Mintlify sites do: `https://code.claude.com/docs/llms.txt`, for one). Give its address as
+`source.llms` instead of a repository, and `only` for the pages to take (e.g. just the English
+ones); the pages are downloaded first, grouped by the index's sections:
+
+```json
+"source": {
+  "llms": "https://code.claude.com/docs/llms.txt",
+  "only": "https://code.claude.com/docs/en/"
+}
+```
+
+Such docs usually aren't openly licensed, so **build them for yourself, on your own computer, and
+don't publish the pack**. `local/claude-code.json` does this for Claude Code's documentation. On
+Windows, in PowerShell, in your copy of this repository:
+
+```sh
+npm install
+npm run build -- local/claude-code.json --out claude-code-pack
+npm run serve -- claude-code-pack
+```
+
+Then in DevDocs, open **Preferences → Doc packs**, paste `http://localhost:8765`, click **Add**,
+tick the doc, and download it for offline reading (DevDocs keeps it; Chrome may first ask whether
+the site may reach devices on your network: allow it). Stop the server with Ctrl+C. To update, run
+the two commands again and refresh the doc in DevDocs. Folders ending in `-pack/` aren't committed.
