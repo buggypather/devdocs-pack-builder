@@ -3,11 +3,13 @@
 //   npm run build                          pack.config.json -> pack/
 //   npm run build -- other.json --out dist
 //   npm run build -- --verbose            also lists each git command and page
+//   npm run build -- local/claude-code.json --out claude-code-pack   a personal pack (see README)
 //
 // On GitHub Actions, "Re-run with debug logging" turns on --verbose too.
 
 import { dirname, resolve } from "node:path";
 import { buildPack, readConfig } from "./build.mjs";
+import { prepareSources } from "./llms.mjs";
 
 const args = process.argv.slice(2);
 const outIndex = args.indexOf("--out");
@@ -18,6 +20,10 @@ const verbose = args.includes("--verbose") || args.includes("-v") || process.env
 try {
   const config = readConfig(configFile);
   const started = Date.now();
+  const log = (message) => console.log(message);
+  const debug = verbose ? (message) => console.log(`  ${message}`) : undefined;
+  // Docs listed by an llms.txt are downloaded first.
+  await prepareSources(config, { cacheDir: resolve(".cache"), log, debug });
   buildPack(config, {
     outDir,
     baseDir: dirname(configFile),

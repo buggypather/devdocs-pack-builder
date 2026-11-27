@@ -4,3 +4,6 @@ pack/
 .env
 .env.*
 !.env.*.example
+
+# Personal packs (docs that may not be shared): build and serve them locally only.
+*-pack/

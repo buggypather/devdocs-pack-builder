@@ -38,7 +38,10 @@ const API_TOP_RGX = /^#[\w.-]+_(package|class|interface|namespace|enum|typealias
  * @property {string} name
  * @property {string} slug
  * @property {string} [version]
- * @property {{ repo?: string, ref?: string, dir?: string, path?: string, root?: string, data?: string, toc?: string }} source
+ * @property {{ repo?: string, ref?: string, dir?: string, path?: string, root?: string, data?: string, toc?: string, llms?: string, only?: string }} source
+ *   `llms` (instead of `repo` or `dir`): the address of an llms.txt that lists
+ *   the pages as Markdown; they're downloaded first (src/llms.mjs). `only`:
+ *   the address the pages to take start with.
  *   `path` is the documentation's folder in the repository; `root` the folder
  *   that links starting with "/" are relative to (GitHub's docs: `content`);
  *   `data` the folder of Liquid variables and reusables (`data`, if it exists);
@@ -103,8 +106,14 @@ export function readConfig(file) {
     if (doc.category !== undefined && !CATEGORIES.includes(doc.category)) {
       throw new Error(`${where}: "category" must be one of ${CATEGORIES.join(", ")}.`);
     }
-    if (!doc.source || (!doc.source.repo && !doc.source.dir)) {
-      throw new Error(`${where}: "source" needs a "repo" (owner/name on GitHub) or a "dir".`);
+    if (!doc.source || (!doc.source.repo && !doc.source.dir && !doc.source.llms)) {
+      throw new Error(`${where}: "source" needs a "repo" (owner/name on GitHub), a "dir", or an "llms" index address.`);
+    }
+    if (doc.source.llms !== undefined && !/^https?:\/\/\S+$/.test(doc.source.llms)) {
+      throw new Error(`${where}: "llms" should be the address of an llms.txt, e.g. "https://code.claude.com/docs/llms.txt".`);
+    }
+    if (doc.source.only !== undefined && !/^https?:\/\/\S+$/.test(doc.source.only)) {
+      throw new Error(`${where}: "only" should be the address the pages start with, e.g. "https://code.claude.com/docs/en/".`);
     }
     if (doc.source.repo && !/^[\w.-]+\/[\w.-]+$/.test(doc.source.repo)) {
       throw new Error(`${where}: "repo" should look like "owner/name", e.g. "github/docs".`);
@@ -245,9 +254,8 @@ export function buildDoc(doc, source, debug = () => {}) {
   const findPage = (href, page) => {
     const [target] = href.split("#");
     if (!target || /^[a-z][a-z0-9+.-]*:|^\/\//i.test(target)) return null;
-    const file = target.startsWith("/")
-      ? posix.join(root, target)
-      : posix.join(posix.dirname(page.file), target);
+    // With the docs at the top of the folder (root ""), "/x.md" is "x.md".
+    const file = (target.startsWith("/") ? posix.join(root, target) : posix.join(posix.dirname(page.file), target)).replace(/^\/+/, "");
     const key = stripExtension(file.replace(/\/$/, ""));
     return byFile.get(key) || byFile.get(`${key}/index`) || byFile.get(key.replace(/\/index$/, "")) || null;
   };
