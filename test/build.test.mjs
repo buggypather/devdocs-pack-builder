@@ -243,3 +243,118 @@ test("Gitiles docs: [TOC] lines are dropped and originals keep their file names"
   assert.ok(!page.includes("[TOC]"), page);
   assert.ok(page.includes('href="https://example.googlesource.com/tool/+/main/docs/build.md"'), page);
 });
+
+test("Jupyter notebooks: text, code and what it printed, with links between them", (t) => {
+  const out = mkdtempSync(join(tmpdir(), "pack-"));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+  buildPack(
+    {
+      name: "Notebooks",
+      docs: [
+        {
+          name: "Notes",
+          slug: "notes",
+          source: { dir: "notebooks", repo: "owner/notes", path: "nb" },
+          site: "https://colab.research.google.com/github/owner/notes/blob/main",
+          siteFiles: true,
+        },
+      ],
+    },
+    { outDir: out, baseDir: FIXTURES, cacheDir: join(out, ".cache") },
+  );
+
+  const pages = JSON.parse(read(out, "notes/db.json"));
+  assert.deepEqual(Object.keys(pages).sort(), ["Intro", "No_heading_here", "Other", "index"]);
+  // No heading at the top: the file name, never a "# comment" in its code.
+  assert.match(pages.No_heading_here, /^<h1>No heading here<\/h1>/);
+  assert.ok(pages.No_heading_here.includes('<h2 id="step-one">Step one</h2>'), "Colab's #Heading");
+  assert.ok(pages.No_heading_here.includes("<pre>#not a heading</pre>"), "but not in code");
+  const intro = pages.Intro;
+  // The title is the first heading of a text cell, not the code's "# comment" before it.
+  assert.match(intro, /^<h1>Getting started<\/h1>/);
+  assert.ok(intro.includes('<pre data-language="python"># Install the tools\n!pip install thing</pre>'), intro);
+  // Template tags in code are left alone.
+  assert.ok(intro.includes("print(&#39;{{ not liquid }}&#39;)") || intro.includes("print('{{ not liquid }}')"), intro);
+  assert.ok(intro.includes("<pre>{{ not liquid }}</pre>"), "printed text");
+  assert.ok(intro.includes("<pre>42</pre>"), "a result as text, not its HTML");
+  assert.ok(intro.includes('src="data:image/png;base64,iVBORw0KGgo="'), "a small picture");
+  assert.ok(!intro.includes("<script>"), "no HTML output");
+  assert.ok(intro.includes("<pre>ValueError: bad</pre>"), "an error");
+  assert.ok(intro.includes("… (60 more lines)"), "long output is cut");
+  assert.ok(intro.includes('<a href="Other">link</a>'), intro);
+  assert.ok(pages.Other.includes('<a href="Intro#getting-started">the intro</a>'), pages.Other);
+  assert.ok(intro.includes('href="https://colab.research.google.com/github/owner/notes/blob/main/nb/Intro.ipynb"'), "opens in Colab");
+
+  const index = JSON.parse(read(out, "notes/index.json"));
+  assert.deepEqual(index.entries.map((entry) => entry.name).sort(), ["Getting started", "No heading here", "No heading here: Step one", "Other one"]);
+});
+
+test("a Python package: a page per module, each function, class and method searchable", (t) => {
+  const out = mkdtempSync(join(tmpdir(), "pack-"));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+  buildPack(
+    {
+      name: "Python",
+      docs: [
+        {
+          name: "My package",
+          slug: "mypkg",
+          format: "python",
+          source: { dir: "python", repo: "owner/py", path: "mypkg" },
+          site: "https://github.com/owner/py/blob/main",
+          siteFiles: true,
+        },
+      ],
+    },
+    { outDir: out, baseDir: FIXTURES, cacheDir: join(out, ".cache") },
+  );
+
+  const pages = JSON.parse(read(out, "mypkg/db.json"));
+  // Private modules and folders, and tests, are left out.
+  assert.deepEqual(Object.keys(pages).sort(), ["index", "tools", "tools/extra", "widgets"]);
+
+  const widgets = pages.widgets;
+  assert.match(widgets, /^<h1>mypkg\.widgets<\/h1>/);
+  assert.ok(widgets.includes('<h2 id="make"><code>make(name: str, *, size: int=3, **options) -&gt; &#39;Panel&#39;</code></h2>') || widgets.includes('<h2 id="make"><code>make(name: str, *, size: int=3, **options) -&gt; \'Panel\'</code></h2>'), widgets);
+  assert.ok(widgets.includes("<strong>Args</strong>"), widgets);
+  assert.ok(widgets.includes("<li><code>name</code>: What it&#39;s called. A long description that goes on.</li>"), widgets);
+  assert.ok(!widgets.includes("Bases: <code>object</code>"), "object isn't worth saying");
+  assert.ok(widgets.includes("<li><code>size</code> (int): How big.</li>"), widgets);
+  assert.ok(widgets.includes("<li><code>**options</code>: Anything else.</li>"), widgets);
+  assert.ok(widgets.includes('<h2 id="fetch">async <code>fetch(url)</code></h2>'), widgets);
+  assert.ok(!widgets.includes("helper"), "not in __all__");
+  assert.ok(widgets.includes('<h2 id="Panel">class <code>Panel(name, colour=&#39;blue&#39;)</code></h2>') || widgets.includes(`<h2 id="Panel">class <code>Panel(name, colour='blue')</code></h2>`), widgets);
+  assert.ok(widgets.includes("<pre data-language=\"python\">p = Panel(&#39;a&#39;)\np.show()</pre>") || widgets.includes("<pre data-language=\"python\">p = Panel(&quot;a&quot;)") || widgets.includes(`<pre data-language="python">p = Panel('a')\np.show()</pre>`), "an example not indented under Example: is code");
+  assert.ok(widgets.includes('<h3 id="Panel.show"><code>Panel.show(times=1)</code></h3>'), widgets);
+  assert.ok(widgets.includes('<h3 id="Panel.width">property <code>Panel.width</code></h3>'), widgets);
+  assert.ok(!widgets.includes("_private"), widgets);
+
+  // A package's __init__ that re-exports from its private modules.
+  assert.ok(pages.tools.includes('<h2 id="cut"><code>cut(thing)</code></h2>'), pages.tools);
+  assert.ok(pages.tools.includes('<h2 id="Saw">class <code>Saw</code></h2>'), pages.tools);
+  // The home page lists the modules, under the package's own description (its < kept as text).
+  assert.ok(pages.index.includes("tools for &lt;things&gt;"), pages.index);
+  assert.ok(pages.index.includes('<a href="widgets">mypkg.widgets</a>'), pages.index);
+  assert.ok(widgets.includes('href="https://github.com/owner/py/blob/main/mypkg/widgets.py"'), "the original");
+
+  const index = JSON.parse(read(out, "mypkg/index.json"));
+  const names = index.entries.map((entry) => entry.name);
+  for (const name of ["mypkg.widgets", "widgets.make()", "widgets.Panel()", "widgets.Panel.show()", "widgets.Panel.width", "widgets.fetch()", "tools.cut()", "tools.Saw()", "tools.extra.extra()"]) {
+    assert.ok(names.includes(name), `${name} in ${names.join(", ")}`);
+  }
+  assert.equal(index.entries.find((entry) => entry.name === "widgets.Panel.show()").path, "widgets#Panel.show");
+  assert.deepEqual(index.types.map((type) => type.name).sort(), ["mypkg", "mypkg.tools"]);
+});
+
+test("Python config mistakes are explained", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "config-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "pack.config.json");
+  const check = (doc, pattern) => {
+    writeFileSync(file, JSON.stringify({ docs: [{ name: "A", slug: "a", source: { repo: "o/r" }, ...doc }] }));
+    assert.throws(() => readConfig(file), pattern);
+  };
+  check({ format: "rst" }, /"format" must be one of/);
+  check({ format: "python" }, /package's folder as "path"/);
+  check({ format: "python", package: "not-a-name", source: { repo: "o/r", path: "x" } }, /import name/);
+});

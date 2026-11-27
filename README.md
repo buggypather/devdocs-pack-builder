@@ -1,6 +1,7 @@
 # DevDocs pack builder
 
-Turns documentation written in Markdown, in any public GitHub repository, into a
+Turns documentation written in Markdown (or Jupyter notebooks, or a Python package's docstrings),
+in any public GitHub repository, into a
 [doc pack](https://github.com/buggypather/devdocs/blob/main-custom-docs/docs/doc-packs.md)
 that you can add to DevDocs: searchable, readable offline, and updated every week.
 
@@ -25,6 +26,9 @@ To let others find your pack, add the topic `devdocs-pack` to your repository (t
 - [devdocs-pack-firebase](https://github.com/buggypather/devdocs-pack-firebase): the Firebase
   JavaScript SDK's API reference, from the Markdown in
   [firebase/firebase-js-sdk](https://github.com/firebase/firebase-js-sdk/tree/main/docs-devsite).
+- [devdocs-pack-colab](https://github.com/buggypather/devdocs-pack-colab): Google Colab's
+  `google.colab` Python reference, from the docstrings in
+  [googlecolab/colabtools](https://github.com/googlecolab/colabtools), and its example notebooks.
 
 ## pack.config.json
 
@@ -63,6 +67,8 @@ To let others find your pack, add the topic `devdocs-pack` to your repository (t
 | `source.root` | Optional: the folder that links starting with `/` are relative to. For GitHub's docs, `content`. Defaults to `path`. |
 | `source.data` | Optional: the folder with the variables and snippets that `{% data ... %}` tags use. Defaults to `data`. |
 | `source.toc` | Optional: a table of contents in the `_toc.yaml` form of Google's developer sites, in the docs' folder. It sets the pages' order, and each top item becomes a sidebar group. |
+| `format` | Optional: `markdown` (the default: Markdown files and Jupyter notebooks), or `python` for a Python package's reference made from its docstrings, with `path` its folder (see below). |
+| `package` | For `python`: the package's import name, e.g. `google.colab`. Made from `path` otherwise. |
 | `entries` | Optional: what's searchable besides each page. `sections` (the default) adds each `##` section; `api` is for API references made by [API Documenter](https://api-extractor.com/pages/setup/generating_docs/), and adds each function and member, e.g. `getAuth()` and `User.reload()`. |
 | `versions` | For GitHub's docs: which product's content to keep where pages differ. `fpt` is GitHub.com (Free, Pro, Team); `ghec` Enterprise Cloud; `ghes` Enterprise Server. Defaults to `["fpt"]`. |
 | `site` | Optional: where the docs are published. Links to pages outside the doc go there, and each page links to its original. |
@@ -81,13 +87,43 @@ To let others find your pack, add the topic `devdocs-pack` to your repository (t
 - Headings with their own ids, `## Setup {#setup}` or `{:#setup}`, as Jekyll, Hugo and Google's sites write them.
 - The settings lines (`Project:`, `Book:`) at the top of pages from Google's developer sites.
 - Links between pages, which stay inside DevDocs; images, which load from GitHub.
+- Jupyter notebooks (`.ipynb`): text cells, code cells, and what the code printed (text, errors
+  and small pictures; HTML and widgets are left out). The title is a heading on the first line,
+  or a bold first line, or else the file name. With `site` set to
+  `https://colab.research.google.com/github/<owner>/<repo>/blob/<branch>` and `siteFiles: true`,
+  each page links to its notebook, opened in Colab.
+
+### Python packages
+
+With `"format": "python"`, each public module of the package in `path` becomes a page, with its
+functions and classes (and their methods and properties), their signatures and their docstrings.
+Google-style sections (`Args:`, `Returns:`, `Raises:`, `Example:`) are laid out as lists and code.
+Each function, class and method is searchable: `drive.mount()`, `widgets.Grid.output_to()`.
+
+A module's public names are its `__all__`, or else what it defines without a leading `_`, plus what
+a package's `__init__.py` brings in from its own private modules. Modules and folders starting with
+`_`, tests (`*_test.py`, `test_*.py`, `tests/`) and test data are left out. Nothing is imported or
+run: the files are only read, with Python's own parser, so the package's dependencies aren't needed.
+
+```json
+{
+  "name": "Colab",
+  "slug": "colab",
+  "format": "python",
+  "package": "google.colab",
+  "source": { "repo": "googlecolab/colabtools", "path": "google/colab" },
+  "site": "https://github.com/googlecolab/colabtools/blob/main",
+  "siteFiles": true,
+  "attribution": "&copy; Google LLC<br>Licensed under the Apache License, Version 2.0."
+}
+```
 
 Each page becomes a search entry, and so does each `##` section. Pages are grouped in the sidebar
 by their top folder.
 
 ## Building on your own computer
 
-Needs [Node.js](https://nodejs.org) 22 or newer and Git.
+Needs [Node.js](https://nodejs.org) 22 or newer and Git, and Python 3.9 or newer for Python packages.
 
 ```sh
 npm install
